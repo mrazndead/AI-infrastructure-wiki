@@ -84,6 +84,204 @@ The final layer is building the application logic that users interact with.
 *   **Agentic Workflows:** Frameworks like [Microsoft AutoGen](#article:autogen-framework) and [CrewAI](#article:crewai-task-delegation) allow multiple specialized agents to collaborate, plan, and execute complex tasks.
     `
   },
+  {
+    id: 'definitive-guide-ai-strategy',
+    title: 'Building AI Infrastructure: The Definitive Strategy Guide',
+    category: 'Getting Started',
+    subcategory: 'Strategy',
+    readTime: '30 min read',
+    excerpt: 'A holistic framework for getting AI right. Balancing performance, cost, and scalability while avoiding vendor lock-in and Shadow AI.',
+    date: '2024-12-20',
+    tags: ['Strategy', 'Management', 'Enterprise', 'Guide'],
+    content: `
+# Getting AI Right: The Infrastructure Imperative
+
+Infrastructure is destiny. In the AI era, your infrastructure choices dictate your model velocity, your unit economics, and ultimately, your competitive advantage. This guide consolidates the best practices for building a production-grade AI platform.
+
+## 1. The Core Philosophy: "AI as a Workload, Not a Science Project"
+
+Too many organizations treat AI as an R&D experiment. To get it right, you must treat it as a mission-critical workload with SLAs, SLOs, and rigorous CI/CD.
+
+### The Four Pillars of AI Infra
+1.  **Compute:** The raw horsepower (GPUs, TPUs, NPUs).
+2.  **Data:** The fuel (Data Lakes, Vector Stores, Feature Stores).
+3.  **Model:** The software artifact (Weights, Biases, Code).
+4.  **Operationalization:** The delivery mechanism (Serving, Monitoring, Retraining).
+
+## 2. Build vs. Buy: The Eternal Question
+
+*   **Buy (API-First):** Start here. Using OpenAI or Anthropic APIs eliminates infrastructure headaches. However, as volume scales, costs scale linearly. There are no economies of scale.
+*   **Build (Open Source/Self-Hosted):** Requires significant CapEx and OpEx. However, unit costs drop dramatically at scale. You own the IP, and you control data privacy.
+    *   *Rule of Thumb:* If you spend >$500k/year on APIs, investigate self-hosting Llama 3 or Mistral.
+
+## 3. The "AI Tax" and Cost Management
+
+AI is expensive. "Getting it right" means optimizing TCO.
+*   **Spot Instances:** Use spot instances for fault-tolerant training jobs (with checkpointing) to save 60-70%.
+*   **Right-Sizing:** Don't put a 7B model on an H100. Use A10s or L4s for smaller inference tasks.
+*   **Data Gravity:** Compute must move to data, not vice versa. Egress fees can kill your budget if you train in AWS using data stored in Azure.
+
+## 4. The Trap of Vendor Lock-In
+
+The cloud providers want you to use their proprietary stacks (SageMaker, Vertex AI). While convenient, they lock you into their ecosystem.
+*   **The Kubernetes Abstraction:** By building on K8s, you commoditize the compute layer. You can lift and shift your training job from AWS to CoreWeave to on-prem with minimal code changes.
+    `
+  },
+  {
+    id: '5-step-guide-scalable-ai',
+    title: 'A 5-Step Guide to Scalable AI Infrastructure',
+    category: 'Infrastructure',
+    subcategory: 'Storage & Data',
+    readTime: '25 min read',
+    excerpt: 'Optimizing the data path is critical for AI success. This 5-step framework covers eliminating I/O bottlenecks, GPU saturation, and data intelligence.',
+    date: '2025-01-20',
+    tags: ['Storage', 'Scalability', 'DataManagement', 'Guide'],
+    content: `
+# The Data Bottleneck in AI
+
+While much attention is paid to GPU performance (FLOPS), the hidden bottleneck in most AI systems is **Storage I/O**. A $30,000 H100 GPU is worthless if it spends 40% of its time waiting for data. This guide outlines 5 steps to ensure your data infrastructure keeps pace with your compute.
+
+## Step 1: Architect for GPU Saturation (Eliminate I/O Wait)
+
+Traditional enterprise storage (NAS) was designed for human-speed access (Word docs, PDFs). AI requires machine-speed access.
+*   **The Challenge:** Deep Learning training involves random read patterns on massive datasets (millions of small images). Standard NFS protocols introduce too much latency metadata overhead.
+*   **The Solution:** Implement a high-performance **Parallel File System** (like Lustre, GPFS, or DDN Exascaler). Unlike NFS, which bottlenecks on a single head node, parallel file systems stripe data across hundreds of disks, allowing the GPU to read from all of them simultaneously.
+*   **Goal:** Keep GPU utilization (volatile utility) above 90%.
+
+## Step 2: Ensure Linear Scalability
+
+In AI, your dataset will grow by 10x next year. Your storage performance must grow with it.
+*   **Scale-Up vs. Scale-Out:** Avoid monolithic filers. Use a scale-out architecture where adding capacity (more drives) also adds performance (more controllers/bandwidth).
+*   **Benchmarks:** Don't just test throughput (GB/s). Test **IOPS** (Operations Per Second) on small files (4KB - 128KB), which is the dominant pattern for computer vision training.
+
+## Step 3: Optimize the Full Data Lifecycle
+
+Not all data needs to be on NVMe flash.
+*   **Hot Tier:** Training datasets currently in use. Must be on NVMe.
+*   **Warm Tier:** Checkpoints and validation sets. High throughput HDD or QLC flash.
+*   **Cold Tier:** Raw ingest data and archival models. Object Storage (S3).
+*   **Automation:** Use automated policy engines to move data between tiers transparently. The data scientist should see a single namespace ("/data/dataset_a") regardless of where the bits physically sit.
+
+## Step 4: Secure the Data Pipeline
+
+AI infrastructure is often multi-tenant (Research, Engineering, Production).
+*   **Multi-Tenancy:** Ensure strict isolation. A heavy training job from the Research team should not starve the bandwidth of the Production inference API.
+*   **Encryption:** Implementation of encryption at rest and in flight (using GPU Direct Storage to decrypt on the NIC/GPU) to minimize CPU overhead.
+
+## Step 5: Gain Data Intelligence (Visibility)
+
+You cannot optimize what you cannot measure.
+*   **I/O Profiling:** Monitor which jobs are I/O bound vs Compute bound.
+*   **Pattern Recognition:** Identify "read-heavy" vs "write-heavy" (checkpointing) phases of the training loop.
+*   **Optimization:** Use this intelligence to pre-fetch data into the GPU memory or local NVMe cache before the training step requests it.
+
+### Conclusion
+Building scalable AI infrastructure is about balancing the equation: **Compute Speed = Data Delivery Speed**. If data delivery lags, you are paying for idle silicon.
+    `
+  },
+  {
+    id: 'k8s-ai-operating-system',
+    title: 'Why Kubernetes is the Operating System for AI',
+    category: 'Software',
+    subcategory: 'Orchestration',
+    readTime: '18 min read',
+    excerpt: 'Kubernetes has won the war for AI orchestration. Understanding Operators, CRDs, and how K8s abstracts the GPU layer.',
+    date: '2024-11-15',
+    tags: ['Kubernetes', 'Architecture', 'K8s'],
+    content: `
+# The Universal Compute Plane
+
+Just as Linux became the OS for the server, Kubernetes (K8s) has become the OS for the data center. For AI, it provides the critical abstraction layer between your code and the metal.
+
+## 1. Declarative Infrastructure
+
+In AI, you don't want to manually provision servers. You want to declare: *"I need 64 GPUs with 80GB VRAM connected via Infiniband."*
+K8s makes this possible via **Custom Resource Definitions (CRDs)**.
+*   **RayJob:** Defines a distributed Ray cluster.
+*   **TFJob / PyTorchJob:** Defines distributed training sets.
+
+## 2. The Operator Pattern
+
+K8s Operators automate the human operational knowledge.
+*   **NVIDIA GPU Operator:** Automatically installs drivers, the container toolkit, and monitoring exporters on any node that joins the cluster.
+*   **Vector DB Operators:** Manage the sharding and replication of Milvus or Weaviate databases.
+
+## 3. Resource Scheduling & Bin Packing
+
+AI jobs are "gang scheduled"—they need all resources at once. K8s schedulers (like Volcano or Kueue) ensure that high-priority training runs preempt low-priority research jobs, maximizing cluster utilization (MFU).
+
+## 4. Portability
+
+A K8s manifest runs the same on AWS EKS, Google GKE, or a bare-metal rack in your basement. This portability is the only hedge against rising cloud GPU prices.
+    `
+  },
+  {
+    id: 'hybrid-cloud-ai-patterns',
+    title: 'Hybrid Cloud AI: Bursting to the Cloud',
+    category: 'Infrastructure',
+    subcategory: 'Strategy',
+    readTime: '20 min read',
+    excerpt: 'The economics of hybrid AI. Running steady-state inference on-prem while bursting training jobs to the public cloud.',
+    date: '2025-01-05',
+    tags: ['Hybrid', 'Cloud', 'Cost', 'Architecture'],
+    content: `
+# Balancing CapEx and OpEx
+
+The "All-In on Cloud" strategy is failing for large-scale AI. The "All-In On-Prem" strategy is too slow. The answer is Hybrid.
+
+## Pattern 1: Training in Cloud, Inference On-Prem
+
+*   **Training:** Requires massive bursts of compute (thousands of GPUs) for a short time (weeks). Cloud is perfect for this elasticity.
+*   **Inference:** Requires steady-state, 24/7 availability. Cloud rental fees (OpEx) accumulate forever. Buying hardware (CapEx) amortizes over 3-5 years, offering 5-10x cost savings.
+
+## Pattern 2: Data Sovereignty (The reverse)
+
+For industries like Healthcare and Finance, data cannot leave the building.
+*   **Fine-Tuning:** Happens on-prem on secure, air-gapped clusters.
+*   **General Purpose:** Non-sensitive workloads use public APIs.
+
+## The Technical Enablers
+
+1.  **Unified Control Plane:** Using tools like Rancher or Anthos to manage on-prem and cloud K8s clusters from a single pane of glass.
+2.  **Global Namespace Storage:** Technologies like **HammerSpace** or **WEKA** that present a single file system view across locations. Data is cached locally where the compute is running.
+    `
+  },
+  {
+    id: 'mlops-production-pipelines',
+    title: 'The MLOps Lifecycle: Productionizing Research',
+    category: 'Software',
+    subcategory: 'MLOps',
+    readTime: '22 min read',
+    excerpt: 'Moving from "it works on my laptop" to production. Feature stores, model registries, and continuous training pipelines.',
+    date: '2025-01-10',
+    tags: ['MLOps', 'DevOps', 'Pipelines'],
+    content: `
+# Bridging the Gap
+
+Data Scientists work in Notebooks. Engineers work in IDEs. MLOps bridges this chasm.
+
+## 1. The Feature Store (Feast / Tecton)
+
+*   **Problem:** Training uses a CSV dump from last month. Inference uses live data. This causes "Training-Serving Skew".
+*   **Solution:** A Feature Store provides a consistent source of truth. It serves batch features for training and low-latency KV lookups for inference.
+
+## 2. The Model Registry (MLflow)
+
+A model is not just a file. It is a versioned artifact with metadata.
+*   **Lineage:** Which dataset trained this model? Which code commit?
+*   **Staging:** Promoting models from \`Staging\` to \`Production\` only after passing automated eval gates.
+
+## 3. Continuous Training (CT)
+
+Models rot. Data distributions shift.
+*   **Drift Detection:** Monitoring the statistical properties of inputs. If the input distribution shifts (Concept Drift), a webhook triggers a re-training pipeline automatically.
+
+## 4. Serving Infrastructure
+
+*   **Canary Deployments:** Rolling out a new model to 1% of traffic to check latency and error rates before full release.
+*   **Shadow Mode:** Running the new model in parallel with the old one, but not returning its results to the user. Used to verify accuracy safely.
+    `
+  },
 
   // --- HARDWARE / COMPUTE SILICON ---
   {
@@ -966,6 +1164,212 @@ Using GPT-4 to grade your local model.
 *   **Precision:** Did retrieval find the right docs?
     `
   },
+  
+  // --- USE CASES ---
+  {
+    id: 'use-case-enterprise-rag',
+    title: 'Enterprise Search: The Knowledge Engine',
+    category: 'Use Cases',
+    subcategory: 'Knowledge Management',
+    readTime: '25 min read',
+    excerpt: 'Architecting a RAG system for 10M+ documents. Handling ACLs, citations, and multi-hop reasoning across PDFs, SharePoint, and Jira.',
+    date: '2025-02-10',
+    tags: ['RAG', 'Enterprise', 'Architecture'],
+    content: `
+# Connecting the Corporate Brain
+
+Building a "ChatGPT for your data" is easy to demo but hard to productionize.
+
+## 1. The Ingestion Pipeline
+Garbage in, Garbage out. The challenge isn't the LLM, it's parsing 10 years of messy PDFs.
+*   **Unstructured.io:** Using vision models to detect tables, headers, and footers in PDFs before chunking.
+*   **Recursive Chunking:** Splitting text intelligently (by paragraph) rather than by fixed character counts to preserve semantic context.
+
+## 2. Advanced Indexing
+*   **Hybrid Search:** Combining **BM25** (keyword matching for specific part numbers) with **Cosine Similarity** (semantic understanding).
+*   **Reranking:** The vector DB returns 50 results. A Cross-Encoder model (like BGE-Reranker-v2) re-scores them to find the top 5 most relevant. This improves accuracy by ~15%.
+
+## 3. Security (ACLs)
+You cannot simply dump everything into one index.
+*   **Document Level Security:** We embed Access Control Lists (Active Directory Groups) directly into the vector metadata.
+*   **Filtering:** Queries are pre-filtered: \`SELECT * FROM vectors WHERE user_group IN ('Engineering', 'All_Staff')\`.
+    `
+  },
+  {
+    id: 'use-case-customer-support-agents',
+    title: 'Autonomous Support: Replacing Tier 1',
+    category: 'Use Cases',
+    subcategory: 'Customer Experience',
+    readTime: '20 min read',
+    excerpt: 'Designing agents that can take action. API integration for refunds, order tracking, and identity verification without human intervention.',
+    date: '2025-02-12',
+    tags: ['Agents', 'CustomerSupport', 'Automation'],
+    content: `
+# Beyond the Chatbot
+
+Old chatbots followed a decision tree. New agents use reasoning.
+
+## 1. Tool Use (Function Calling)
+The model is given a set of APIs defined in JSON schema.
+*   \`check_order_status(order_id)\`
+*   \`process_refund(order_id, reason)\`
+The model decides *which* tool to call based on the user's intent.
+
+## 2. The Routing Layer
+Not every query needs GPT-4.
+*   **Semantic Router:** A small BERT model classifies the intent.
+    *   "Where is my stuff?" -> Route to Llama-3-8B + Order API.
+    *   "I want to sue you." -> Route to Human Agent immediately.
+
+## 3. Latency Optimization
+Users hate waiting.
+*   **Speculative Decoding:** Used to generate empathetic filler text ("I understand you're frustrated, let me check that...") while the slow API call runs in the background.
+    `
+  },
+  {
+    id: 'use-case-legal-contract-review',
+    title: 'Legal Tech: Automated Contract Analysis',
+    category: 'Use Cases',
+    subcategory: 'Legal',
+    readTime: '18 min read',
+    excerpt: 'Semantic analysis of NDAs and MSAs. Redlining, risk scoring, and clause comparison using long-context LLMs.',
+    date: '2025-02-15',
+    tags: ['Legal', 'NLP', 'Risk'],
+    content: `
+# The 100-Page Document
+
+Legal contracts require massive context windows and perfect recall.
+
+## 1. Clause Extraction
+Instead of treating the document as one blob, we segment it into functional blocks: "Indemnity", "Termination", "Jurisdiction".
+*   **Technique:** We fine-tuned a DeBERTa model to classify paragraphs into legal categories.
+
+## 2. Risk Scoring (Playbooks)
+The system compares incoming contracts against a company "Playbook".
+*   *Rule:* "Liability cap must not exceed 2x fees."
+*   *Action:* The Agent extracts the liability clause, extracts the fee value, performs math, and flags violations.
+
+## 3. Automated Redlining
+Using models like **Claude 3 Opus** (due to high reasoning capability), we generate suggested redlines in track-changes format to align the contract with company policy.
+    `
+  },
+  {
+    id: 'use-case-fintech-fraud',
+    title: 'FinTech: Real-Time Transaction Monitoring',
+    category: 'Use Cases',
+    subcategory: 'Finance',
+    readTime: '22 min read',
+    excerpt: 'Moving from rules-based engines to Graph Neural Networks and LLMs for detecting money laundering rings in milliseconds.',
+    date: '2025-02-18',
+    tags: ['Finance', 'Fraud', 'RealTime'],
+    content: `
+# Catching the Ring
+
+Traditional fraud detection uses rules: \`if amount > $10,000\`.
+Modern fraud uses **Graph Neural Networks (GNNs)**.
+
+## 1. The Graph Topology
+We model data as a graph:
+*   **Nodes:** Users, Credit Cards, IP Addresses, Device IDs.
+*   **Edges:** Transactions, Logins, Shared Attributes.
+A GNN (like GraphSAGE) can detect "Money Laundering Rings" where funds cycle through 50 accounts in minutes—a pattern invisible to tabular models.
+
+## 2. LLM Explainability
+The GNN outputs a score (0.99 Fraud). The human analyst asks "Why?".
+*   **Solution:** We feed the subgraph neighbors into an LLM.
+*   **Output:** "High risk because User A shares a Device ID with User B, who was previously banned for chargeback fraud."
+
+## 3. Low Latency Inference
+Inference must happen in <20ms (during the card swipe).
+*   **Feature Store:** Pre-computed graph embeddings are stored in Redis/Cassandra for instant lookup.
+    `
+  },
+  {
+    id: 'use-case-legacy-migration',
+    title: 'App Modernization: COBOL to Java',
+    category: 'Use Cases',
+    subcategory: 'Software Engineering',
+    readTime: '24 min read',
+    excerpt: 'Using LLMs to decompose monolithic mainframes. Test generation, transpilation, and business logic extraction patterns.',
+    date: '2025-02-20',
+    tags: ['Migration', 'COBOL', 'Engineering'],
+    content: `
+# De-risking the Monolith
+
+Banks run on COBOL. The developers are retiring.
+
+## 1. The "Reasoning" Transpiler
+Direct regex translation fails. We use a multi-step chain:
+1.  **Explain:** LLM reads COBOL and writes a functional spec in English.
+2.  **Test:** LLM generates unit tests (Input/Output pairs) based on the COBOL logic.
+3.  **Code:** LLM writes Java/Go code to match the spec.
+4.  **Verify:** The new code is run against the generated tests.
+
+## 2. Database De-coupling
+*   **Problem:** Stored Procedures with 5,000 lines of logic.
+*   **Solution:** Agents trace data lineage to separate "Business Logic" from "Data Access", moving the logic into the application layer.
+
+## 3. Human in the Loop
+The AI doesn't commit code. It opens a Pull Request. It generates a "Migration Report" highlighting ambiguous logic (e.g., GOTO statements) for human review.
+    `
+  },
+  {
+    id: 'use-case-predictive-maintenance',
+    title: 'Manufacturing: Visual QC & Predictive Maintenance',
+    category: 'Use Cases',
+    subcategory: 'Industrial',
+    readTime: '16 min read',
+    excerpt: 'Deploying Vision Transformers (ViT) to the edge. Detecting defects in assembly lines and predicting equipment failure using audio/vibration data.',
+    date: '2025-02-22',
+    tags: ['Manufacturing', 'Edge', 'Vision'],
+    content: `
+# AI on the Factory Floor
+
+Cloud connectivity is spotty. Latency must be real-time.
+
+## 1. Visual Quality Control
+*   **Model:** YOLOv8 or EfficientNet fine-tuned on defect images.
+*   **Deployment:** Compiled to **TensorRT** and deployed on **NVIDIA Jetson** edge devices.
+*   **Task:** Cameras inspect PCBs at 60 FPS. If a scratch is detected, a pneumatic arm kicks the part off the line.
+
+## 2. Audio Anomaly Detection
+Motors sound different before they break.
+*   **Sensor:** Piezoelectric vibration sensors + Microphones.
+*   **Technique:** Spectrogram analysis. We convert audio to images (spectrograms) and use Vision models to detect "abnormal" frequency bands indicating bearing wear.
+
+## 3. Digital Twins
+We feed real-time sensor data into a physics-based simulation (Digital Twin). An AI compares the *actual* temperature vs the *predicted* temperature. Divergence indicates a sensor fault or cooling failure.
+    `
+  },
+  {
+    id: 'use-case-drug-discovery',
+    title: 'Life Sciences: Generative Protein Design',
+    category: 'Use Cases',
+    subcategory: 'Healthcare',
+    readTime: '28 min read',
+    excerpt: 'Accelerating the wet lab loop. Using AlphaFold, DiffDock, and generative chemistry to propose novel drug candidates.',
+    date: '2025-02-25',
+    tags: ['BioTech', 'DrugDiscovery', 'AlphaFold'],
+    content: `
+# Generative Biology
+
+Biology is becoming an engineering discipline.
+
+## 1. Structure Prediction (AlphaFold)
+Predicting the 3D shape of a protein from its 1D amino acid sequence.
+*   **Infrastructure:** Massive inference pipelines running on A100s.
+*   **Goal:** Identifying binding pockets on the protein surface (targets for drugs).
+
+## 2. Molecular Docking (DiffDock)
+Simulating how a small molecule (drug) fits into the protein's binding pocket.
+*   **Traditional:** Physics-based simulation (slow).
+*   **AI:** Diffusion models (DiffDock) predict the orientation in seconds.
+
+## 3. De Novo Design
+Instead of screening existing libraries, we use Generative Models to *hallucinate* new molecules that have high affinity for the target but low toxicity.
+*   **Reinforcement Learning:** The model is rewarded for optimizing properties (Solubility, Permeability, Affinity).
+    `
+  },
 
   // --- ENGINEERING BLOG POSTS ---
   {
@@ -1460,7 +1864,7 @@ We saved **$15,000/month** in natural gas bills during winter. Effectively, the 
     date: '2025-02-08',
     tags: ['MLOps', 'CI/CD', 'Quality'],
     content: `
-# The "Vibe Check" is Not a Test
+# The "Vibe Check" is Not A Test
 
 Engineers were merging PRs that "felt faster" but silently degraded model accuracy.
 

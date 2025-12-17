@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Server } from 'lucide-react';
 
 interface FooterProps {
@@ -6,20 +6,6 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ onArticleClick }) => {
-  const [visitorCount, setVisitorCount] = useState("01");
-
-  useEffect(() => {
-    // Persistent view count using localStorage
-    const stored = localStorage.getItem('infra_page_views');
-    let localCount = stored ? parseInt(stored) : 0;
-    localCount++;
-    localStorage.setItem('infra_page_views', localCount.toString());
-    
-    // Format
-    const formatted = localCount < 10 ? `0${localCount}` : localCount.toLocaleString();
-    setVisitorCount(formatted);
-  }, []);
-
   const handleLinkClick = (id: string) => {
     if (onArticleClick) {
       onArticleClick(id);
@@ -43,17 +29,6 @@ export const Footer: React.FC<FooterProps> = ({ onArticleClick }) => {
             <p className="text-slate-500 text-xs leading-relaxed mb-6">
               The premier knowledge hub for AI infrastructure engineering. From silicon to swarm orchestration, we document the stack that powers intelligence.
             </p>
-            
-            <div className="flex items-center space-x-3 bg-slate-900/50 border border-slate-800 rounded-lg px-4 py-3 w-full max-w-[200px]">
-              <div className="relative flex-shrink-0">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-75"></div>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">System Query Count</span>
-                <span className="text-white font-mono font-medium tracking-wide">{visitorCount}</span>
-              </div>
-            </div>
           </div>
           
           {/* Hardware - Compute Silicon */}
