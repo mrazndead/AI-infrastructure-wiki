@@ -867,7 +867,7 @@ When 10,000 GPUs save memory to disk simultaneously, storage dies.
 # The Root Problem
 
 Docker daemon runs as root. On a shared supercomputer, you can't give users root.
-*   **Singularity (Apptainer):** Runs containers as a standard user. Encapsulates the environment in a single file (.sif).
+*   **Singularity (Apptainer):** Runs containers as a standard user. Encapsulates the environment in a single file (\`.sif\`).
 *   **Enroot:** NVIDIA's tool to turn Docker images into unprivileged sandboxes, bridging the gap between cloud (Docker) and HPC (Slurm).
     `
   },
