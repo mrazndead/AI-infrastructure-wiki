@@ -1331,6 +1331,244 @@ Attention is $O(N^2)$. As context length grows (1M tokens), compute grows expone
 1.  **In-Context Learning:** Transformers are surprisingly good at "recall" from anywhere in the context. SSMs struggle slightly with perfect recall over long distances.
 2.  **Hardware Lottery:** TPUs and GPUs have 7 years of optimization for MatMul (Transformers). SSMs rely on "Prefix Scans" which are not yet hardware accelerated to the same degree.
     `
+  },
+  {
+    id: 'blog-gpu-utilization-debugging',
+    title: 'The Case of the 30% MFU: Debugging GPU Utilization',
+    category: 'Blog',
+    readTime: '25 min read',
+    excerpt: 'Our H100s were idle 70% of the time. We deep dive into Nsight Systems profiling, kernel launch latency, and CPU bottlenecks.',
+    date: '2025-01-22',
+    tags: ['Performance', 'Debugging', 'Nsight'],
+    content: `
+# Buying Ferraris to Drive in a School Zone
+
+We spent millions on H100s, but our Model Flops Utilization (MFU) was sitting at 30%. This is effectively lighting money on fire.
+
+### The Investigation: Nsight Systems
+We used \`nsys profile\` to visualize the timeline. The findings were shocking:
+1.  **Kernel Launch Latency:** We were launching thousands of tiny CUDA kernels (element-wise operations). The overhead of telling the GPU what to do took longer than doing it.
+    *   *Fix:* We used **Torch.compile** to fuse these kernels into single, larger operations.
+2.  **CPU Bottleneck:** The CPU couldn't feed data fast enough. The GPU was waiting for the next batch.
+    *   *Fix:* We moved preprocessing (image resizing/normalization) to DALI (Data Loading Library) to run it on the GPU, freeing up the CPU.
+
+### The Result
+After kernel fusion and dataloader optimization, MFU jumped to 58%, effectively doubling our cluster size for free.
+    `
+  },
+  {
+    id: 'blog-networking-rail-optimization',
+    title: 'Rail-Optimized Networking for H100 Clusters',
+    category: 'Blog',
+    readTime: '28 min read',
+    excerpt: 'Why standard CLOS topologies fail for AI. Explaining Rail-Optimization, sharp reductions, and avoiding QPI traversal.',
+    date: '2025-01-25',
+    tags: ['Networking', 'Architecture', 'Infiniband'],
+    content: `
+# Physics of the Switch
+
+In a standard data center, any server can talk to any server. In AI training, traffic patterns are highly predictable.
+
+### The Rail Concept
+An H100 server has 8 GPUs. Each GPU has its own 400Gb Network Interface Card (NIC).
+Instead of connecting all 8 NICs to the same Top-of-Rack (ToR) switch, we connect:
+*   GPU 0 from *every* server to Switch A (Rail 1).
+*   GPU 1 from *every* server to Switch B (Rail 2).
+*   ...up to Rail 8.
+
+### Why?
+1.  **No QPI/UPI Traversal:** Traffic from GPU 0 never needs to cross the CPU interconnect to get to the NIC. It has a direct PCIe path.
+2.  **Congestion Isolation:** If Rail 1 is congested, it doesn't affect the All-Reduce happening on Rail 2.
+3.  **Perfect Load Balancing:** Deep learning collectives (All-Reduce) naturally align with this physical topology.
+    `
+  },
+  {
+    id: 'blog-storage-lustre-tuning',
+    title: 'Tuning Lustre for Billion-Scale Image Datasets',
+    category: 'Blog',
+    readTime: '20 min read',
+    excerpt: 'Default Lustre settings will crash under AI workloads. We discuss stripe counts, OST balancing, and client-side caching.',
+    date: '2025-01-28',
+    tags: ['Storage', 'Lustre', 'HPC'],
+    content: `
+# The Metadata Hammer
+
+We have a dataset with 2 Billion images. \`ls -l\` takes 4 hours.
+
+### Optimization 1: Directory Striping (DNE)
+Standard Lustre puts all metadata on one MDT (Metadata Target). We enabled **Distributed Namespace (DNE)** to stripe directory metadata across 4 MDTs. Now \`ls\` is parallelized.
+
+### Optimization 2: File Striping
+For large checkpoints (100GB+), we set the stripe count to -1 (stripe across all OSTs). This allows us to write to 100 hard drives simultaneously, achieving 50 GB/s write speeds for a single file.
+
+### Optimization 3: Client Read-Ahead
+We tuned \`max_read_ahead_mb\` to match our training batch size. If the model asks for 1MB, Lustre pre-fetches the next 64MB, anticipating the sequential read pattern of the tarball.
+    `
+  },
+  {
+    id: 'blog-inference-speculative-decoding',
+    title: 'Speculative Decoding: Free Latency',
+    category: 'Blog',
+    readTime: '18 min read',
+    excerpt: 'How we reduced latency by 2x without changing the model. Using draft models and speculative verification.',
+    date: '2025-02-02',
+    tags: ['Inference', 'Optimization', 'Algorithms'],
+    content: `
+# Guessing the Future
+
+LLMs are memory bound. Generating one token takes the same amount of time as checking 5 tokens.
+
+### The Trick
+We run a tiny "Draft Model" (e.g., Llama-7B) alongside our "Oracle Model" (Llama-70B).
+1.  The Draft Model quickly guesses the next 5 tokens.
+2.  The Oracle Model runs *once* in parallel to verify all 5 guesses.
+3.  If the guesses are right, we just generated 5 tokens for the cost of 1.
+
+### Implementation
+We deployed this using vLLM's speculative decoding. We achieved a **2.3x speedup** on code generation tasks, where tokens are highly predictable (e.g., repeating indentation or closing brackets).
+    `
+  },
+  {
+    id: 'blog-energy-heat-reuse',
+    title: 'Heating Our Office with Llama 3 Training Runs',
+    category: 'Blog',
+    readTime: '15 min read',
+    excerpt: 'Sustainability is not just buying carbon credits. How we plumbed our DLC loops into the building\'s heating system.',
+    date: '2025-02-05',
+    tags: ['Sustainability', 'Hardware', 'Cooling'],
+    content: `
+# Computing as a Heater
+
+A GPU is essentially a resistor that does math. 100% of the electricity becomes heat.
+Our H100 cluster outputs 200kW of heat.
+
+### The Loop
+1.  **Primary Loop:** Water touches the GPU cold plates, heating up to 45°C.
+2.  **Heat Exchanger:** Transfers heat to the building's secondary loop.
+3.  **District Heating:** The warm water is pumped into the office floor radiators.
+
+### The Economics
+We saved **$15,000/month** in natural gas bills during winter. Effectively, the "cooling cost" of the cluster became negative—it became a revenue-generating asset for facilities management.
+    `
+  },
+  {
+    id: 'blog-cicd-ml-pipeline',
+    title: 'CI/CD for LLMs: Testing Perplexity on Every Commit',
+    category: 'Blog',
+    readTime: '22 min read',
+    excerpt: 'You wouldn\'t deploy code without tests. Why deploy models without evals? Our automated regression harness.',
+    date: '2025-02-08',
+    tags: ['MLOps', 'CI/CD', 'Quality'],
+    content: `
+# The "Vibe Check" is Not a Test
+
+Engineers were merging PRs that "felt faster" but silently degraded model accuracy.
+
+### The Pipeline
+On every git commit to the training repo:
+1.  **Unit Tests:** Check shape consistency of custom kernels.
+2.  **Integration Test:** Train the model for 50 steps on a tiny "sanity" dataset.
+3.  **Loss Spike Detection:** If the loss curve deviates >5% from the baseline run, the build fails.
+
+### The Nightly Run
+Every night, we run a full evaluation on the "Golden Checkpoint" against MMLU and GSM8k. This catches "alignment drift" where the model becomes safer but dumber.
+    `
+  },
+  {
+    id: 'blog-security-side-channel',
+    title: 'GPU Side-Channel Attacks in Multi-Tenant Clouds',
+    category: 'Blog',
+    readTime: '24 min read',
+    excerpt: 'Can a malicious tenant steal your weights? Exploring memory bandwidth contention attacks and MIG isolation.',
+    date: '2025-02-12',
+    tags: ['Security', 'Cloud', 'Research'],
+    content: `
+# Noisy Neighbors with Ears
+
+In a cloud environment, you might share a node with a competitor.
+Even if you are on different VMs, you share the same GPU memory bus (HBM) and L2 Cache.
+
+### The Attack
+By measuring the precise time it takes to write to memory, an attacker can infer the memory access patterns of the victim.
+*   **Model Extraction:** Reconstructing the architecture (layer sizes) based on memory traffic bursts.
+*   **Weight Recovery:** Theoretical attacks exist to recover weights via Rowhammer-style disturbances.
+
+### The Defense: MIG
+We strictly enforce **Multi-Instance GPU (MIG)** with Compute Instance isolation. This partitions the L2 cache and memory bus hardware, making side-channel timing attacks statistically impossible.
+    `
+  },
+  {
+    id: 'blog-data-loader-optimization',
+    title: 'Benchmarking FFCV vs WebDataset',
+    category: 'Blog',
+    readTime: '20 min read',
+    excerpt: 'PyTorch DataLoader is the bottleneck. We benchmarked FFCV\'s memcpy elimination against WebDataset\'s tar streaming.',
+    date: '2025-02-15',
+    tags: ['Performance', 'Data', 'PyTorch'],
+    content: `
+# The CPU choke
+
+We have 8 H100s hungry for data. The CPUs are pinned at 100% just decoding JPEGs.
+
+### WebDataset
+*   **Pros:** Standard tar format, infinite streaming from S3.
+*   **Cons:** Still relies on CPU-based PIL/OpenCV decoding.
+
+### FFCV (Fast Forward Computer Vision)
+FFCV pre-compiles the dataset into a custom format.
+*   **JIT Decoding:** It doesn't decode the image until it's on the GPU.
+*   **Memcpy Elimination:** It uses OS-level page caching to map disk directly to memory.
+
+### The Winner
+For ImageNet training, **FFCV was 4x faster** than WebDataset. However, for variable-length text (LLMs), WebDataset remains the king due to FFCV's rigid fixed-size constraints.
+    `
+  },
+  {
+    id: 'blog-cluster-auto-remediation',
+    title: 'Auto-Remediation of Xid 79 Errors',
+    category: 'Blog',
+    readTime: '16 min read',
+    excerpt: 'Sleep is for the weak, or for those with good automation. How we automatically handle GPU fall-off-the-bus events.',
+    date: '2025-02-18',
+    tags: ['Ops', 'Automation', 'Reliability'],
+    content: `
+# Xid 79: GPU has fallen off the bus
+
+This error means the GPU stopped talking to the PCIe switch. A reboot usually fixes it, but doing that manually at 3 AM sucks.
+
+### The Bot
+We wrote a Kubernetes Operator that watches for this specific dmesg log.
+1.  **Cordon:** Immediately marks the node as unschedulable.
+2.  **Drain:** Evicts all pods (triggering Ray/Slurm fault tolerance).
+3.  **Reset:** Issues an IPMI/BMC hard reset to power cycle the physical node.
+4.  **Validate:** Runs a quick \`gpu-burn\` test upon reboot.
+5.  **Uncordon:** Adds the node back to the pool.
+
+We now recover from 50+ GPU failures a week with zero human intervention.
+    `
+  },
+  {
+    id: 'blog-quantization-fp8-reality',
+    title: 'FP8 Training: The Reality vs The Hype',
+    category: 'Blog',
+    readTime: '26 min read',
+    excerpt: 'NVIDIA says FP8 doubles throughput. They didn\'t mention the loss spikes. Our experience stabilizing E4M3 training.',
+    date: '2025-02-22',
+    tags: ['Training', 'Quantization', 'Math'],
+    content: `
+# 8 Bits is Not A Lot
+
+Going from BF16 (16 bits) to FP8 (8 bits) reduces memory bandwidth by half.
+But FP8 has limited dynamic range.
+*   **E4M3:** 4 bits exponent, 3 bits mantissa. Good for weights.
+*   **E5M2:** 5 bits exponent, 2 bits mantissa. Good for gradients (needs dynamic range).
+
+### The Problem: Underflow
+During training, gradients get very small. In FP8, they round down to zero. The model stops learning.
+
+### The Solution: Delayed Scaling
+We implemented **Delayed Scaling**. We track the maximum value of tensors over a rolling window of 500 steps. We use this history to calculate a scaling factor that keeps the values within the tiny "Goldilocks zone" of FP8. This stabilized the loss curve, though it added 5% compute overhead.
+    `
   }
 ];
 
