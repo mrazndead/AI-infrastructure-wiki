@@ -965,6 +965,372 @@ Using GPT-4 to grade your local model.
 *   **Relevance:** Did it answer the question?
 *   **Precision:** Did retrieval find the right docs?
     `
+  },
+
+  // --- ENGINEERING BLOG POSTS ---
+  {
+    id: 'blog-migrating-aws-bare-metal',
+    title: 'Saving 60% by Moving from AWS to Bare Metal',
+    category: 'Blog',
+    readTime: '20 min read',
+    excerpt: 'The cloud premium is real. How we migrated a 500-GPU training cluster from EC2 to bare metal CoreWeave nodes, and the networking challenges we faced.',
+    date: '2025-01-15',
+    tags: ['Migration', 'Cost Optimization', 'AWS', 'CoreWeave'],
+    content: `
+# The Cloud Premium
+
+When you're small, AWS is perfect. You click a button, you get a GPU. But when you hit 500 H100s, the "convenience tax" becomes a multi-million dollar line item.
+
+We recently completed a migration of our core training workload from **AWS p5.48xlarge** instances to a **Bare Metal provider** (CoreWeave/Lambda style).
+
+### The Economics
+*   **AWS On-Demand:** ~$98/hr per H100 node (8 GPUs).
+*   **Reserved Instances (1yr):** ~$60/hr.
+*   **Bare Metal Contract:** ~$35/hr.
+
+For a 64-node cluster (512 GPUs), that's a difference of **$11M per year**.
+
+### The Challenges
+It wasn't just copy-paste.
+1.  **Networking:** We lost the AWS VPC/Security Group abstraction. We had to manage BGP routes and configure our own firewall rules on the ToR (Top of Rack) switches.
+2.  **Storage:** S3 is magical. We replaced it with a self-hosted **MinIO** cluster backed by 2PB of NVMe, but tuning the erasure coding for throughput took weeks.
+3.  **Instance Stability:** On AWS, if a node dies, you get a new one instantly. On bare metal, you wait for a technician to replace the DIMM. We had to rewrite our training loops to be much more fault-tolerant.
+    `
+  },
+  {
+    id: 'blog-debugging-nccl',
+    title: 'Debugging NCCL Hangs: A War Story',
+    category: 'Blog',
+    readTime: '15 min read',
+    excerpt: 'The training run stalled at iteration 4000. No error logs. No tracebacks. Just silence. Here is how we debugged a frozen 256-GPU cluster.',
+    date: '2025-01-08',
+    tags: ['Debugging', 'NCCL', 'Distributed Training'],
+    content: `
+# The Silent Killer
+
+There is nothing scarier in ML Engineering than a training run that just... stops. GPU utilization drops to 0%, but the process doesn't exit.
+
+### The Suspect: NCCL
+NCCL (NVIDIA Collective Communications Library) is responsible for syncing gradients. If one GPU fails to send its handshake, the other 255 GPUs wait forever.
+
+### The Investigation
+1.  **NCCL_DEBUG=INFO**: We turned on logging. Nothing obvious.
+2.  **PyTorch Profiler:** Showed we were stuck in \`all_reduce\`.
+3.  **GDB:** We attached GDB to a running process. It was stuck in a CUDA kernel wait.
+
+### The Root Cause
+It wasn't software. It was a **loose QSFP cable** on Node 14. The cable was connected enough to show "Link Up" but had high bit-error rates (BER). Packets were being dropped, re-transmitted, and dropped again, causing a "soft hang."
+
+### The Fix
+We deployed a daemon that continuously monitors \`ethtool -S | grep error\`. If any link sees error counts rising, we automatically cordon the node and restart the job.
+    `
+  },
+  {
+    id: 'blog-optimizing-vllm',
+    title: 'Optimizing vLLM Throughput for Production',
+    category: 'Blog',
+    readTime: '18 min read',
+    excerpt: 'Continuous batching is not enough. How we tuned block sizes, KV-cache allocation, and max-num-seqs to squeeze 2000 tokens/sec out of a single A100.',
+    date: '2024-12-20',
+    tags: ['vLLM', 'Inference', 'Performance'],
+    content: `
+# Beyond Out-of-the-Box
+
+vLLM is fast by default, but production workloads require tuning. We increased our throughput by 40% with three changes.
+
+### 1. Block Size Matters
+The default block size is 16. We found that for our prompt length distribution (long context, short answer), a **block size of 32** reduced memory fragmentation and improved cache hits.
+
+### 2. GPU Memory Utilization
+We bumped \`gpu_memory_utilization\` from 0.90 to 0.98. This sounds dangerous, but since our model weights are static and we don't use beam search, we could safely allocate more VRAM to the KV cache, allowing larger batch sizes.
+
+### 3. Prefix Caching
+We enabled \`enable_prefix_caching\`. Our users often ask follow-up questions with the same system prompt and document context. vLLM now reuses the KV cache for the shared prefix, reducing TTFT (Time To First Token) from 200ms to 40ms.
+    `
+  },
+  {
+    id: 'blog-liquid-cooling-leaks',
+    title: 'Disaster Recovery: When Liquid Cooling Leaks',
+    category: 'Blog',
+    readTime: '12 min read',
+    excerpt: 'What happens when a coolant hose bursts inside a $2M compute rack? Our post-mortem on a Direct Liquid Cooling failure.',
+    date: '2024-12-15',
+    tags: ['Hardware', 'Cooling', 'Post-Mortem'],
+    content: `
+# The Pink Puddle
+
+We use Direct Liquid Cooling (DLC) with a propylene glycol mix (colored pink). Last Tuesday, the leak detection tape triggered an alarm in Row 4.
+
+### The Failure
+A Quick Disconnect (QD) coupling had not been fully seated during maintenance. Under pressure, the O-ring failed.
+
+### The Damage
+Gravity is the enemy. The leak happened on the top U (Unit 42). Coolant dripped down through 3 other servers.
+*   **Survivors:** The motherboards were conformal coated (water-resistant). We washed them with isopropyl alcohol, and they booted!
+*   **Casualties:** The Power Supply Units (PSUs) were not coated. Two of them shorted immediately.
+
+### Lessons Learned
+1.  **Drip Pans:** We installed drip pans between every 10U block.
+2.  **Negative Pressure:** We switched our CDU (Coolant Distribution Unit) to negative pressure. In a leak, air gets sucked *in* rather than water spraying *out*.
+    `
+  },
+  {
+    id: 'blog-rust-for-ai-infra',
+    title: 'Why We Rewrote Our Sidecars in Rust',
+    category: 'Blog',
+    readTime: '14 min read',
+    excerpt: 'Python was eating 20% of our CPU just for logging. Moving our sidecar agents to Rust reduced overhead to <1%.',
+    date: '2024-12-05',
+    tags: ['Rust', 'Performance', 'Infrastructure'],
+    content: `
+# The Python Tax
+
+In our Kubernetes clusters, every pod runs a "sidecar" container responsible for:
+1.  Shipping logs to Splunk.
+2.  Pulling secrets from Vault.
+3.  Reporting heartbeats.
+
+Our Python sidecar consumed ~1 core and 500MB RAM. Multiplied by 5,000 pods, we were wasting **5,000 CPU cores** just on plumbing.
+
+### Enter Rust
+We rewrote the agent in Rust using \`tokio\`.
+*   **Binary Size:** 300MB (Python) -> 15MB (Rust).
+*   **Memory:** 500MB -> 12MB.
+*   **CPU:** 1 Core -> 0.05 Cores.
+
+The migration saved us an estimated **$40k/month** in compute costs, proving that high-level languages in the infra layer have a hidden cost.
+    `
+  },
+  {
+    id: 'blog-gpu-kernel-development',
+    title: 'Writing Custom Kernels: An Intro to Triton DSL',
+    category: 'Blog',
+    readTime: '22 min read',
+    excerpt: 'You do not need to know CUDA C++ to make PyTorch go fast. A tutorial on writing a fused Softmax kernel in OpenAI Triton.',
+    date: '2024-11-28',
+    tags: ['Triton', 'CUDA', 'Optimization'],
+    content: `
+# The Gap Between Python and CUDA
+
+PyTorch is easy, but slow (memory bound). CUDA is fast, but hard (C++, pointers, manual memory management).
+**Triton** fills the gap. It allows you to write Python-like code that compiles to efficient PTX.
+
+### The Problem: Softmax
+Standard Softmax requires:
+1.  Read row ($O(N)$)
+2.  Find Max ($O(N)$)
+3.  Subtract Max & Exp ($O(N)$)
+4.  Sum ($O(N)$)
+5.  Divide ($O(N)$)
+6.  Write ($O(N)$)
+
+That is 6 memory passes.
+
+### The Triton Solution
+In Triton, we load the row into SRAM *once*, perform all math in registers, and write back *once*.
+
+\`\`\`python
+@triton.jit
+def softmax_kernel(output_ptr, input_ptr, stride, n_cols, BLOCK_SIZE: tl.constexpr):
+    # Load data into SRAM
+    row_idx = tl.program_id(0)
+    offsets = row_idx * stride + tl.arange(0, BLOCK_SIZE)
+    x = tl.load(input_ptr + offsets, mask=offsets < n_cols, other=-float('inf'))
+    
+    # Math in Registers
+    x_max = tl.max(x, axis=0)
+    numerator = tl.exp(x - x_max)
+    denominator = tl.sum(numerator, axis=0)
+    output = numerator / denominator
+    
+    # Write Back
+    tl.store(output_ptr + offsets, output, mask=offsets < n_cols)
+\`\`\`
+    `
+  },
+  {
+    id: 'blog-cost-of-training-llama3',
+    title: 'The Real Cost of Training Llama 3',
+    category: 'Blog',
+    readTime: '16 min read',
+    excerpt: 'It is not just GPU hours. We break down the hidden costs of data egress, storage IOPS, and checkpoint retention.',
+    date: '2024-11-15',
+    tags: ['Cost', 'Llama 3', 'Training'],
+    content: `
+# The GPU Bill is Only 60%
+
+We modeled the cost of training a 70B parameter model from scratch.
+*   **Compute:** $2.5M.
+*   **Data Egress:** $400k. (Pulling CommonCrawl from S3 to a different region).
+*   **Checkpoint Storage:** $300k. We saved a 500GB checkpoint every 1000 steps. We forgot to set a lifecycle policy to delete old ones. By the end, we had petabytes of stale checkpoints.
+*   **DevOps Time:** $200k. Two engineers full-time for 3 months keeping the cluster alive.
+    `
+  },
+  {
+    id: 'blog-kubernetes-vs-slurm',
+    title: 'Kubernetes vs Slurm: The Internal Debate',
+    category: 'Blog',
+    readTime: '18 min read',
+    excerpt: 'Our Research team wanted Slurm. Our Platform team wanted Kubernetes. Here is how we compromised with Volcano Scheduler.',
+    date: '2024-11-10',
+    tags: ['Kubernetes', 'Slurm', 'Platform'],
+    content: `
+# The Culture Clash
+
+*   **Researchers:** "I just want to run \`sbatch script.sh\`. I don't want to write a 50-line YAML file."
+*   **Platform:** "We need K8s for observability, sidecars, and integration with our CI/CD."
+
+### The Compromise
+We built a CLI tool that looks like Slurm (\`job submit\`) but generates K8s CRDs under the hood. We used **Volcano Scheduler** to add "Gang Scheduling" (all-or-nothing pod creation) to Kubernetes, satisfying the distributed training requirement.
+    `
+  },
+  {
+    id: 'blog-storage-patterns',
+    title: 'High Performance Storage Patterns for Multi-Modal AI',
+    category: 'Blog',
+    readTime: '15 min read',
+    excerpt: 'Training on images and video kills standard NFS. How we used WebDataset and local NVMe caching to saturate GPU bandwidth.',
+    date: '2024-10-28',
+    tags: ['Storage', 'Data Loading', 'Performance'],
+    content: `
+# Small Files Problem
+
+A file system hates 1 billion 50KB JPEG images. The metadata overhead (opening/closing file handles) becomes the bottleneck.
+
+### Solution 1: Tarballs (WebDataset)
+We packed images into 1GB tar files. The dataloader reads the tar stream sequentially. This changed our read pattern from "Random Small IO" to "Sequential Large IO", which disks love.
+
+### Solution 2: Local Caching
+We implemented a tiered cache.
+1.  S3 (Source of Truth)
+2.  Alluxio (Distributed Cache)
+3.  Local NVMe (Ephemeral Node Storage)
+
+The first epoch is slow (cache warming). Subsequent epochs run at PCIe speeds.
+    `
+  },
+  {
+    id: 'blog-observability-gpu',
+    title: 'Observability for 10k GPUs',
+    category: 'Blog',
+    readTime: '14 min read',
+    excerpt: 'Prometheus struggled with the cardinality. How we moved to VictoriaMetrics to track per-SM metrics across the fleet.',
+    date: '2024-10-15',
+    tags: ['Observability', 'Prometheus', 'Ops'],
+    content: `
+# The Cardinality Explosion
+
+We wanted to track \`sm_efficiency\` for *every* GPU process.
+\`metric{host="node-1", gpu="0", pid="1234", user="alice"}\`
+
+With 10,000 GPUs and processes constantly starting/stopping, our Prometheus TSDB exploded. Queries took 2 minutes.
+
+### The Fix
+1.  **VictoriaMetrics:** We migrated to VM for better high-cardinality performance.
+2.  **Aggregation:** We stopped recording per-process metrics in the long-term store. We aggregate to per-node metrics, and only enable per-process high-fidelity debugging on-demand.
+    `
+  },
+  {
+    id: 'blog-agent-orchestration',
+    title: 'Orchestrating 1000 Agents: Production Patterns',
+    category: 'Blog',
+    readTime: '16 min read',
+    excerpt: 'Agents getting stuck in loops? Context windows overflowing? Patterns for reliable autonomous swarms.',
+    date: '2024-10-05',
+    tags: ['Agents', 'Architecture', 'GenAI'],
+    content: `
+# The Infinite Loop
+
+We deployed a "Research Agent" that could search the web. It got stuck searching for the same term, reading the same page, and summarizing it forever.
+
+### Pattern 1: The Supervisor
+We introduced a "Manager Agent" that strictly monitors the sub-agent's logs. If the sub-agent repeats an action 3 times, the Manager kills it and rewrites the prompt.
+
+### Pattern 2: Tool Constraints
+We removed the "general python executor" tool. It was too dangerous/flaky. We replaced it with strict, typed functions: \`search_google(query: str)\`, \`scrape_url(url: str)\`. Reliability went up 10x.
+    `
+  },
+  {
+    id: 'blog-security-model-weights',
+    title: 'Securing Model Weights: The $100M File',
+    category: 'Blog',
+    readTime: '12 min read',
+    excerpt: 'How we prevent exfiltration. Signed URLs, VPC Endpoints, and mTLS for inference services.',
+    date: '2024-09-25',
+    tags: ['Security', 'DevSecOps', 'Models'],
+    content: `
+# DLP (Data Loss Prevention) for Weights
+
+Your model checkpoint is your IP.
+1.  **VPC Endpoints:** Our S3 buckets are not accessible over the public internet. Access is only allowed from specific VPC IDs.
+2.  **Presigned URLs:** Developers never get AWS Keys. They get a temporary URL that expires in 15 minutes to download a specific checkpoint.
+3.  **Watermarking:** We embed subtle noise patterns in the weights. If the model leaks to HuggingFace, we can mathematically prove it was ours.
+    `
+  },
+  {
+    id: 'blog-energy-efficiency',
+    title: 'Undervolting for Profit: Green AI',
+    category: 'Blog',
+    readTime: '15 min read',
+    excerpt: 'We capped our H100s at 600W instead of 700W. Performance dropped 2%, but energy costs dropped 15%.',
+    date: '2024-09-12',
+    tags: ['Sustainability', 'Hardware', 'Optimization'],
+    content: `
+# The Power Curve
+
+Semiconductors are not linear. The last 10% of performance requires 30% more power (and heat).
+
+### The Experiment
+We ran \`nvidia-smi -pl 600\` (Power Limit) on our training cluster.
+*   **Throughput:** dropped from 310 TFLOPS to 304 TFLOPS. (-2%)
+*   **Power:** dropped from 700W to 600W. (-14%)
+*   **Thermals:** Fans spun down, saving another 50W per chassis.
+
+For a long training run, the slight increase in time was paid for by the massive electricity savings.
+    `
+  },
+  {
+    id: 'blog-hiring-ml-infra',
+    title: 'Hiring for ML Infrastructure: What We Look For',
+    category: 'Blog',
+    readTime: '14 min read',
+    excerpt: 'We do not care if you know how Transformer Attention works. We care if you know what a File Descriptor is.',
+    date: '2024-09-01',
+    tags: ['Career', 'Hiring', 'Culture'],
+    content: `
+# The Skill Gap
+
+We see thousands of resumes from "Prompt Engineers". We see very few from people who understand Linux internals.
+
+### The Interview Question
+*"A GPU is stuck in D-state (Uninterruptible Sleep). How do you debug it?"*
+
+We look for candidates who understand:
+1.  Kernel drivers.
+2.  PCIe bus errors.
+3.  The difference between user-space CUDA and kernel-space drivers.
+
+The best ML Infra engineers are usually SysAdmins who learned Python, not Data Scientists who learned Docker.
+    `
+  },
+  {
+    id: 'blog-future-of-transformer',
+    title: 'Is the Transformer Architecture Peaking?',
+    category: 'Blog',
+    readTime: '20 min read',
+    excerpt: 'SSMs, Mamba, and RWKV. Looking at the linear-attention contenders that might replace the Quadratic Bottleneck.',
+    date: '2024-08-20',
+    tags: ['Research', 'Architecture', 'Future'],
+    content: `
+# The Quadratic Wall
+
+Attention is $O(N^2)$. As context length grows (1M tokens), compute grows exponentially.
+**Mamba (SSM)** offers $O(N)$ inference (Linear). It acts like an RNN, compressing history into a fixed state.
+
+### Why haven't they won yet?
+1.  **In-Context Learning:** Transformers are surprisingly good at "recall" from anywhere in the context. SSMs struggle slightly with perfect recall over long distances.
+2.  **Hardware Lottery:** TPUs and GPUs have 7 years of optimization for MatMul (Transformers). SSMs rely on "Prefix Scans" which are not yet hardware accelerated to the same degree.
+    `
   }
 ];
 
